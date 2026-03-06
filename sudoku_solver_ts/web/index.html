@@ -686,8 +686,9 @@ function generateBestPuzzle(size, density) {
   var candidates = size >= 81 ? 2 : (size >= 25 ? 8 : (size >= 16 ? 5 : 3));
   var bestPuzzle = null;
   var bestScore = Infinity;
+  var baseSeed = Math.floor(Math.random() * 1000000);
   for (var i = 0; i < candidates; i++) {
-    var seed = 52 * (i + 1);
+    var seed = baseSeed + i;
     var puzzle = generateByRemoval(size, density, seed);
     var score = ratePuzzleDifficulty(size, puzzle);
     if (score < bestScore) { bestScore = score; bestPuzzle = puzzle; }

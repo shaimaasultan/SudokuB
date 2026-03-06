@@ -21,11 +21,11 @@
 
 | | Feature | Description |
 |---|---------|-------------|
-| 🔢 | **Multi-size support** | 9×9, 16×16, 25×25, 36×36, 49×49, and 64×64 |
+| 🔢 | **Multi-size support** | 9×9, 16×16, 25×25, 36×36, 49×49, 64×64, 81×81, and 256×256 |
 | 🎬 | **Live solving simulation** | Watch the solver work cell-by-cell in real time with color-coded propagation steps |
 | 🧠 | **8 propagation techniques** | Full house, naked singles, hidden singles, pointing pairs, naked pairs/triples, hidden pairs, simple coloring (X-chains) |
 | 🌳 | **Intelligent branching** | MRV + LCV + degree heuristic with stagnation detection and adaptive restarts |
-| ⚡ | **BigUint64 bitmasks** | O(1) bitwise candidate operations, native 64-bit support for grids up to 64×64 |
+| ⚡ | **Hybrid bitmask engine** | BigUint64Array for N≤64 (fast typed arrays), arbitrary-precision bigint[] for N>64 — scales to any size |
 | 🔄 | **Re-solvable puzzles** | Solve a puzzle, then re-solve at lower density to discover alternative valid solutions |
 | ⚖️ | **Balanced generation** | Per-unit clue distribution guarantees solvable, well-formed puzzles without solver verification |
 | 🏆 | **Best-of-N selection** | Generates multiple candidate puzzles and picks the hardest one |
@@ -44,6 +44,7 @@
 | 📦 | **npm package** | Importable solver library |
 | 🚀 | **Zero install** | Fully self-contained HTML file, no dependencies |
 | 🎨 | **Canvas rendering** | Smooth real-time grid visualization with zoom controls |
+| 📸 | **PNG export** | Export the current grid as a clean PNG image with one click |
 
 ---
 
@@ -170,19 +171,19 @@ sudoku_solver_ts/
 | **tdoku** (C++) | ~1 μs/puzzle | Fastest known; SIMD-optimized, 9×9 only |
 | **JCZSolve** (C) | ~2 μs/puzzle | Hand-tuned bit tricks, 9×9 only |
 | **fsss2** (C++) | ~3 μs/puzzle | Template metaprogramming, 9×9 only |
-| **This solver** (TS) | ~ms range | General-purpose, all sizes up to 64×64 |
+| **This solver** (TS) | ~ms range | General-purpose, all sizes up to 256×256 |
 
 > 💡 For 9×9, specialized C++ solvers are ~1000× faster — but they are hardcoded to 9×9 and cannot handle larger grids.
 
 ### Multi-Size Comparison
 
-| Solver | 16×16 | 25×25 | 36×36 | 49×49 | 64×64 |
-|--------|:-----:|:-----:|:-----:|:-----:|:-----:|
-| **DLX (Knuth)** | ✅ fast | ⏳ minutes | ⚠️ impractical | ❌ | ❌ |
-| **SAT (MiniSat/CaDiCaL)** | ✅ fast | ⏳ 10–60s | ⏳ minutes | ⚠️ often timeout | ❌ |
-| **Z3/SMT** | ✅ fast | ⏳ 30s+ | ⚠️ very slow | ❌ | ❌ |
-| **OR-Tools CP-SAT** | ✅ fast | ⏳ 10–30s | ⚠️ slow | ❌ | ❌ |
-| **This solver** | ✅ fast | ✅ **3–8s** | ✅ works | ✅ works | ✅ **works** |
+| Solver | 16×16 | 25×25 | 36×36 | 49×49 | 64×64 | 81×81 | 256×256 |
+|--------|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-------:|
+| **DLX (Knuth)** | ✅ fast | ⏳ minutes | ⚠️ impractical | ❌ | ❌ | ❌ | ❌ |
+| **SAT (MiniSat/CaDiCaL)** | ✅ fast | ⏳ 10–60s | ⏳ minutes | ⚠️ often timeout | ❌ | ❌ | ❌ |
+| **Z3/SMT** | ✅ fast | ⏳ 30s+ | ⚠️ very slow | ❌ | ❌ | ❌ | ❌ |
+| **OR-Tools CP-SAT** | ✅ fast | ⏳ 10–30s | ⚠️ slow | ❌ | ❌ | ❌ | ❌ |
+| **This solver** | ✅ fast | ✅ **3–8s** | ✅ works | ✅ works | ✅ **works** | ✅ **works** | ✅ **works** |
 
 > ⏱️ Reported times for this solver include full visualization overhead (real-time cell-by-cell animation in the browser). Raw solving without the visual simulation is faster.
 
@@ -192,7 +193,7 @@ sudoku_solver_ts/
 
 | | Advantage |
 |---|-----------|
-| ⚡ | **BigUint64 bitmasks** — O(1) bitwise ops per candidate check, native 64-bit support |
+| ⚡ | **Hybrid bitmask engine** — BigUint64Array for N≤64, arbitrary-precision bigint[] for N>64 |
 | 🧠 | **8 propagation techniques** — More than most implementations; reduces branching dramatically |
 | 🔁 | **Stagnation-aware restarts** — Adaptive thresholds tuned for large grids escape dead ends efficiently |
 | ⚖️ | **Balanced puzzle generation** — Per-unit clue distribution guarantees propagation can always make progress |
@@ -204,7 +205,8 @@ sudoku_solver_ts/
 | 9×9 speed | Average — ms-range; 1000× behind SIMD specialists, but all are "instant" to humans |
 | 16–25×25 | 🟢 **Strong** — competitive with SAT solvers, faster than generic CP |
 | 36–49×49 | 🟢 **Very strong** — few alternatives even attempt this |
-| 64×64 | 🔵 **Rare** — almost no other solver handles this size |
+| 64–81×81 | 🔵 **Rare** — almost no other solver handles this size |
+| 256×256 | 🟣 **Unique** — no known solver attempts this size |
 | Algorithm breadth | 🟢 **Excellent** — 8 propagation techniques + adaptive branching |
 
 ---

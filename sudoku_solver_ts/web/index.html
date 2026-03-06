@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sudoku Solver</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #0f0c29 0%, #1a1a3e 40%, #24243e 100%);
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  h1 { color: #7df; margin-bottom: 8px; font-size: 1.6em; text-shadow: 0 0 12px rgba(100,200,255,0.3); }
+  .subtitle { color: #999; font-size: 0.85em; margin-bottom: 20px; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .controls label { font-size: 0.85em; color: #aaa; }
+
+  button {
+    padding: 8px 18px;
+    border: 1px solid #555;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #35356a 0%, #2a2a50 100%);
+    color: #ddd;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  button:hover { background: linear-gradient(180deg, #4a4a7a 0%, #3a3a60 100%); border-color: #7df; box-shadow: 0 2px 8px rgba(100,200,255,0.2); }
+  button.active { background: linear-gradient(180deg, #4a6a9a 0%, #3a5a8a 100%); border-color: #7df; color: #fff; box-shadow: 0 0 10px rgba(100,200,255,0.25); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+  .size-btn { min-width: 48px; }
+
+  input[type="range"] {
+    width: 140px;
+    accent-color: #6cf;
+  }
+  #speed-control { width: 100px; accent-color: #f90; }
+
+  #status {
+    text-align: center;
+    min-height: 24px;
+    font-size: 0.85em;
+    color: #8f8;
+    margin-bottom: 12px;
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 14px;
+    font-size: 0.75em;
+    background: rgba(255,255,255,0.03);
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #bbb;
+  }
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 0 4px rgba(0,0,0,0.4);
+  }
+
+  .zoom-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 0.85em;
+  }
+  .zoom-controls label { color: #aaa; }
+  .zoom-btn {
+    min-width: 32px;
+    padding: 4px 10px;
+    font-size: 1.1em;
+    font-weight: bold;
+  }
+  #zoom-val { color: #7df; min-width: 40px; text-align: center; font-weight: bold; }
+  #zoom-slider { width: 120px; accent-color: #7df; }
+
+  #grid-container {
+    display: flex;
+    justify-content: center;
+    overflow: auto;
+    max-width: 95vw;
+    max-height: 75vh;
+    padding: 4px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.2);
+  }
+
+  canvas {
+    border: 2px solid #555;
+    border-radius: 6px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+</style>
+</head>
+<body>
+
+<h1>Sudoku Solver</h1>
+<p class="subtitle">TypeScript &mdash; supports 9&times;9 through 64&times;64 with real-time visualization</p>
+
+<div class="controls">
+  <button class="size-btn active" data-size="9">9</button>
+  <button class="size-btn" data-size="16">16</button>
+  <button class="size-btn" data-size="25">25</button>
+  <button class="size-btn" data-size="36">36</button>
+  <button class="size-btn" data-size="49">49</button>
+  <button class="size-btn" data-size="64">64</button>
+  <span style="width:16px"></span>
+  <label>Density: <span id="density-val">50%</span></label>
+  <input type="range" id="density" min="10" max="90" value="50" step="5">
+  <span style="width:8px"></span>
+  <label>Speed: <span id="speed-val">Fast</span></label>
+  <input type="range" id="speed-control" min="0" max="4" value="3" step="1">
+  <span style="width:16px"></span>
+  <button id="btn-new">NEW GRID</button>
+  <button id="btn-solve">SOLVE</button>
+  <button id="btn-stop" disabled>STOP</button>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:#3a3a6a"></div> Given clue</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#1a8a3a"></div> Forced (propagation)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#c89020"></div> Guess (branching)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#0aaaca"></div> Branch cell selected</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#d03030"></div> Contradiction</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#b040e0"></div> Backtrack</div>
+</div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" id="zoom-out">&minus;</button>
+  <input type="range" id="zoom-slider" min="50" max="250" value="100" step="10">
+  <button class="zoom-btn" id="zoom-in">+</button>
+  <span id="zoom-val">100%</span>
+  <button class="zoom-btn" id="zoom-fit" style="font-size:0.8em;min-width:40px">FIT</button>
+</div>
+
+<div id="status">&nbsp;</div>
+<div id="grid-container">
+  <canvas id="canvas" width="600" height="600"></canvas>
+</div>
+
+<script>// ====== BigInt Helpers ======
+function popcount(n) { let c = 0; let v = n; while (v) { v &= v - 1n; c++; } return c; }
+function bitLen(n) { if (n === 0n) return 0; let l = 0; let v = n; while (v) { v >>= 1n; l++; } return l; }
+function maskToList(mask) {
+  const res = []; let curr = mask;
+  while (curr) { const bit = curr & (-curr); res.push(bitLen(bit)); curr &= ~bit; }
+  return res;
+}
+
+// ====== Grid ======
+class Grid {
+  constructor(size, values) {
+    this.size = size;
+    this.boxSize = Math.round(Math.sqrt(size));
+    this.values = new Int32Array(size * size);
+    if (values) for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) this.values[r * size + c] = values[r][c];
+  }
+  clone() { const g = new Grid(this.size); g.values.set(this.values); return g; }
+  get(r, c) { return this.values[r * this.size + c]; }
+  set(r, c, v) { this.values[r * this.size + c] = v; }
+  isEmpty(r, c) { return this.values[r * this.size + c] === 0; }
+}
+
+// ====== LayerManager ======
+class LayerManager {
+  constructor(grid, skipRebuild = false) {
+    this.grid = grid; this.size = grid.size;
+    this.fullMask = (1n << BigInt(this.size)) - 1n;
+    this.rowMasks = new BigUint64Array(this.size);
+    this.colMasks = new BigUint64Array(this.size);
+    this.boxMasks = new BigUint64Array(this.size);
+    this.manualMasks = new BigUint64Array(this.size * this.size);
+    const N = this.size, bs = grid.boxSize;
+    this.boxIdx = new Int32Array(N * N);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) this.boxIdx[r * N + c] = Math.floor(r / bs) * Math.floor(N / bs) + Math.floor(c / bs);
+    if (!skipRebuild) this.rebuildAllLayers();
+  }
+  rebuildAllLayers() {
+    this.rowMasks.fill(0n); this.colMasks.fill(0n); this.boxMasks.fill(0n); this.manualMasks.fill(0n);
+    const N = this.size;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const v = this.grid.get(r, c);
+      if (v !== 0) { const bit = 1n << BigInt(v - 1); const b = this.boxIdx[r * N + c]; this.rowMasks[r] |= bit; this.colMasks[c] |= bit; this.boxMasks[b] |= bit; }
+    }
+  }
+  updateMasks(r, c, v, setBits) {
+    const bit = 1n << BigInt(v - 1); const b = this.boxIdx[r * this.size + c];
+    if (setBits) { this.rowMasks[r] |= bit; this.colMasks[c] |= bit; this.boxMasks[b] |= bit; }
+    else { this.rowMasks[r] &= ~bit; this.colMasks[c] &= ~bit; this.boxMasks[b] &= ~bit; }
+  }
+  getBoxIndex(r, c) { return this.boxIdx[r * this.size + c]; }
+  getAllowedMask(r, c) {
+    if (!this.grid.isEmpty(r, c)) return 0n;
+    const idx = r * this.size + c; const b = this.boxIdx[idx];
+    return this.fullMask & ~(this.rowMasks[r] | this.colMasks[c] | this.boxMasks[b] | this.manualMasks[idx]);
+  }
+  getAllAllowedMasks() {
+    const N = this.size; const result = new Array(N * N);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const idx = r * N + c;
+      if (this.grid.values[idx] !== 0) result[idx] = 0n;
+      else { const b = this.boxIdx[idx]; result[idx] = this.fullMask & ~(this.rowMasks[r] | this.colMasks[c] | this.boxMasks[b] | this.manualMasks[idx]); }
+    }
+    return result;
+  }
+  isDigitPossibleAt(d, r, c) {
+    if (!this.grid.isEmpty(r, c)) return false;
+    const bit = 1n << BigInt(d - 1); const idx = r * this.size + c; const b = this.boxIdx[idx];
+    return !((this.rowMasks[r] | this.colMasks[c] | this.boxMasks[b] | this.manualMasks[idx]) & bit);
+  }
+  forbidChoice(d, r, c) { this.manualMasks[r * this.size + c] |= (1n << BigInt(d - 1)); }
+  getCellDegree(r, c) {
+    let count = 0; const N = this.size, bs = this.grid.boxSize;
+    for (let i = 0; i < N; i++) { if (i !== c && this.grid.isEmpty(r, i)) count++; if (i !== r && this.grid.isEmpty(i, c)) count++; }
+    const br = Math.floor(r / bs) * bs, bc = Math.floor(c / bs) * bs;
+    for (let dr = 0; dr < bs; dr++) for (let dc = 0; dc < bs; dc++) { const rr = br + dr, cc = bc + dc; if (rr !== r && cc !== c && this.grid.isEmpty(rr, cc)) count++; }
+    return count;
+  }
+  saveState() { return { gridValues: this.grid.values.slice(), rowMasks: this.rowMasks.slice(), colMasks: this.colMasks.slice(), boxMasks: this.boxMasks.slice(), manualMasks: this.manualMasks.slice() }; }
+  restoreState(s) { this.grid.values.set(s.gridValues); this.rowMasks.set(s.rowMasks); this.colMasks.set(s.colMasks); this.boxMasks.set(s.boxMasks); this.manualMasks.set(s.manualMasks); }
+}
+
+// ====== Exceptions ======
+class Contradiction extends Error { constructor(msg) { super(msg); this.name = 'Contradiction'; } }
+class SearchRestart extends Error { constructor(msg) { super(msg); this.name = 'SearchRestart'; } }
+
+// ====== StateStack ======
+class StateStack {
+  constructor() { this.stack = []; }
+  push(s) { this.stack.push({ gridValues: s.gridValues.slice(), rowMasks: s.rowMasks.slice(), colMasks: s.colMasks.slice(), boxMasks: s.boxMasks.slice(), manualMasks: s.manualMasks.slice() }); }
+  pop() { const s = this.stack.pop(); if (!s) throw new Error('Stack underflow'); return s; }
+  isEmpty() { return !this.stack.length; }
+  get length() { return this.stack.length; }
+}
+// ====== Visual event queue ======
+const VIS_FORCED = 1, VIS_GUESS = 2, VIS_CONTRADICTION = 3, VIS_BRANCH_SELECT = 4, VIS_BACKTRACK = 5;
+
+class VisualQueue {
+  constructor() { this.events = []; this.stepCount = 0; }
+  markForced(r, c, d) { this.events.push({ type: VIS_FORCED, r, c, d }); this.stepCount++; }
+  markGuess(r, c, d) { this.events.push({ type: VIS_GUESS, r, c, d }); this.stepCount++; }
+  markContradiction(r, c) { this.events.push({ type: VIS_CONTRADICTION, r, c }); this.stepCount++; }
+  markBranchSelect(r, c) { this.events.push({ type: VIS_BRANCH_SELECT, r, c }); this.stepCount++; }
+  markBacktrack(cells) { this.events.push({ type: VIS_BACKTRACK, cells }); this.stepCount++; }
+  drain() { const evts = this.events; this.events = []; return evts; }
+  get pending() { return this.events.length; }
+}
+
+// ====== Propagator ======
+class Propagator {
+  constructor(grid, layers, visQueue) { this.grid = grid; this.layers = layers; this.vis = visQueue; }
+  get size() { return this.grid.size; }
+
+  runPropagation(stopFn) {
+    while (true) {
+      if (stopFn()) return;
+      if (this._applyFullHouse()) { this._checkContradictions(); continue; }
+      const forced = this._findForced();
+      if (forced.length) { this._applyForced(forced); this._checkContradictions(); continue; }
+      if (this._pointingPairs() || this._nakedPairs() || this._nakedTriples() || this._hiddenPairs() || this._simpleColoring()) { this._checkContradictions(); continue; }
+      this._checkContradictions(); return;
+    }
+  }
+
+  _applyFullHouse() {
+    const N = this.size, fm = this.layers.fullMask, bs = this.grid.boxSize, bsC = Math.floor(N / bs);
+    const moves = []; const rc = new Int32Array(N), cc = new Int32Array(N), bc = new Int32Array(N);
+    const re = new Int32Array(N), ce = new Int32Array(N), beR = new Int32Array(N), beC = new Int32Array(N);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (this.grid.isEmpty(r, c)) {
+      rc[r]++; re[r] = c; cc[c]++; ce[c] = r; const b = this.layers.getBoxIndex(r, c); bc[b]++; beR[b] = r; beC[b] = c;
+    }
+    for (let i = 0; i < N; i++) {
+      if (rc[i] === 1) { const u = fm & ~this.layers.rowMasks[i]; if (u && (u & (u - 1n)) === 0n) moves.push([i, re[i], bitLen(u)]); }
+      if (cc[i] === 1) { const u = fm & ~this.layers.colMasks[i]; if (u && (u & (u - 1n)) === 0n) moves.push([ce[i], i, bitLen(u)]); }
+      if (bc[i] === 1) { const u = fm & ~this.layers.boxMasks[i]; if (u && (u & (u - 1n)) === 0n) moves.push([beR[i], beC[i], bitLen(u)]); }
+    }
+    if (!moves.length) return false;
+    let applied = false;
+    for (const [r, c, d] of moves) if (this.grid.isEmpty(r, c)) {
+      this.grid.set(r, c, d); this.layers.updateMasks(r, c, d, true);
+      this.vis.markForced(r, c, d);
+      applied = true;
+    }
+    return applied;
+  }
+
+  _findForced() {
+    const N = this.size, naked = [];
+    const rO = new Array(N).fill(0n), rM = new Array(N).fill(0n), rCl = Array.from({length:N},()=>new Map());
+    const cO = new Array(N).fill(0n), cM = new Array(N).fill(0n), cCl = Array.from({length:N},()=>new Map());
+    const bO = new Array(N).fill(0n), bM = new Array(N).fill(0n), bCl = Array.from({length:N},()=>new Map());
+    const allM = this.layers.getAllAllowedMasks();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const mask = allM[r*N+c]; if (!mask) continue;
+      if ((mask & (mask-1n)) === 0n) naked.push({row:r,col:c,digit:bitLen(mask)});
+      const b = this.layers.getBoxIndex(r, c);
+      let curr = mask; while (curr) { const bit = curr & (-curr); const d = bitLen(bit);
+        if (rO[r] & bit) rM[r] |= bit; else { rO[r] |= bit; rCl[r].set(d, c); }
+        if (cO[c] & bit) cM[c] |= bit; else { cO[c] |= bit; cCl[c].set(d, r); }
+        if (bO[b] & bit) bM[b] |= bit; else { bO[b] |= bit; bCl[b].set(d, [r,c]); }
+        curr &= ~bit;
+      }
+    }
+    if (naked.length) return this._dedup(naked);
+    const forced = [];
+    for (let i = 0; i < N; i++) {
+      let s = rO[i] & ~rM[i]; while (s) { const bit = s & (-s); const d = bitLen(bit); forced.push({row:i,col:rCl[i].get(d),digit:d}); s &= ~bit; }
+      s = cO[i] & ~cM[i]; while (s) { const bit = s & (-s); const d = bitLen(bit); forced.push({row:cCl[i].get(d),col:i,digit:d}); s &= ~bit; }
+      s = bO[i] & ~bM[i]; while (s) { const bit = s & (-s); const d = bitLen(bit); const [rr,cc] = bCl[i].get(d); forced.push({row:rr,col:cc,digit:d}); s &= ~bit; }
+    }
+    return this._dedup(forced);
+  }
+
+  _dedup(moves) { const m = new Map(); for (const mv of moves) m.set(mv.row+','+mv.col, mv); return Array.from(m.values()); }
+
+  _applyForced(moves) {
+    for (const mv of moves) if (this.grid.isEmpty(mv.row, mv.col)) {
+      this.grid.set(mv.row, mv.col, mv.digit);
+      this.layers.updateMasks(mv.row, mv.col, mv.digit, true);
+      this.vis.markForced(mv.row, mv.col, mv.digit);
+    }
+  }
+
+  _pointingPairs() {
+    const N = this.size, bs = this.grid.boxSize, bsC = Math.floor(N / bs); let any = false;
+    const bdc = Array.from({length:N},()=>Array.from({length:N+1},()=>[]));
+    const allM = this.layers.getAllAllowedMasks();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { const mask = allM[r*N+c]; if (!mask) continue; const b = this.layers.getBoxIndex(r,c); let curr = mask; while (curr) { const bit = curr & (-curr); bdc[b][bitLen(bit)].push([r,c]); curr &= ~bit; } }
+    for (let bi = 0; bi < N; bi++) { const br = Math.floor(bi/bsC)*bs, bc2 = (bi%bsC)*bs;
+      for (let d = 1; d <= N; d++) { const cands = bdc[bi][d]; if (!cands.length) continue;
+        const fR = cands[0][0]; if (cands.every(function(x){return x[0]===fR})) for (let col = 0; col < N; col++) { if (col >= bc2 && col < bc2+bs) continue; if (this.layers.isDigitPossibleAt(d, fR, col)) { this.layers.forbidChoice(d, fR, col); any = true; } }
+        const fC = cands[0][1]; if (cands.every(function(x){return x[1]===fC})) for (let row = 0; row < N; row++) { if (row >= br && row < br+bs) continue; if (this.layers.isDigitPossibleAt(d, row, fC)) { this.layers.forbidChoice(d, row, fC); any = true; } }
+      }
+    }
+    return any;
+  }
+  _collectUnits() {
+    const N = this.size;
+    const rC = Array.from({length:N},()=>[]), cC = Array.from({length:N},()=>[]), bC = Array.from({length:N},()=>[]);
+    const allM = this.layers.getAllAllowedMasks();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { const mask = allM[r*N+c]; if (!mask) continue; const b = this.layers.getBoxIndex(r,c); const e = {mask,r,c}; rC[r].push(e); cC[c].push(e); bC[b].push(e); }
+    return {rC,cC,bC};
+  }
+
+  _nakedPairs() {
+    let any = false; const N = this.size; const {rC,cC,bC} = this._collectUnits();
+    for (let i = 0; i < N; i++) for (const uc of [rC[i],cC[i],bC[i]]) {
+      const masks = new Map();
+      for (const {mask,r,c} of uc) if (popcount(mask)===2) { if (!masks.has(mask)) masks.set(mask,[]); masks.get(mask).push([r,c]); }
+      for (const [mask, pCells] of masks) { if (pCells.length===2) { const ps = new Set(pCells.map(function(x){return x[0]+','+x[1]}));
+        for (const {mask:m2,r:rr,c:cc} of uc) { if (ps.has(rr+','+cc)) continue; if (m2 & mask) { let m = mask; while (m) { const bit = m & (-m); const d = bitLen(bit); if (this.layers.isDigitPossibleAt(d,rr,cc)) { this.layers.forbidChoice(d,rr,cc); any = true; } m &= ~bit; } } } } }
+    }
+    return any;
+  }
+
+  _nakedTriples() {
+    let any = false; const N = this.size; const {rC,cC,bC} = this._collectUnits();
+    for (let i = 0; i < N; i++) for (const uc of [rC[i],cC[i],bC[i]]) {
+      const triples = uc.filter(function(e) { const pc = popcount(e.mask); return pc >= 2 && pc <= 3; });
+      for (let a = 0; a < triples.length-2; a++) for (let b = a+1; b < triples.length-1; b++) for (let ci = b+1; ci < triples.length; ci++) {
+        const union = triples[a].mask | triples[b].mask | triples[ci].mask;
+        if (popcount(union) === 3) { const ts = new Set([triples[a].r+','+triples[a].c, triples[b].r+','+triples[b].c, triples[ci].r+','+triples[ci].c]);
+          for (const {mask,r:rr,c:cc} of uc) { if (ts.has(rr+','+cc)) continue; if (mask & union) { let m = union; while (m) { const bit = m & (-m); const d = bitLen(bit); if (this.layers.isDigitPossibleAt(d,rr,cc)) { this.layers.forbidChoice(d,rr,cc); any = true; } m &= ~bit; } } }
+        }
+      }
+    }
+    return any;
+  }
+
+  _hiddenPairs() {
+    let any = false; const N = this.size;
+    const rD = Array.from({length:N},()=>Array.from({length:N+1},()=>[]));
+    const cD = Array.from({length:N},()=>Array.from({length:N+1},()=>[]));
+    const bD = Array.from({length:N},()=>Array.from({length:N+1},()=>[]));
+    const allM = this.layers.getAllAllowedMasks();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { const mask = allM[r*N+c]; if (!mask) continue; const b = this.layers.getBoxIndex(r,c);
+      let curr = mask; while (curr) { const bit = curr & (-curr); const d = bitLen(bit); rD[r][d].push([r,c]); cD[c][d].push([r,c]); bD[b][d].push([r,c]); curr &= ~bit; }
+    }
+    for (let i = 0; i < N; i++) for (const d2c of [rD[i],cD[i],bD[i]]) {
+      const pairs = new Map();
+      for (let d = 1; d <= N; d++) if (d2c[d].length===2) { const cells = d2c[d].slice().sort(function(a,b){return a[0]-b[0]||a[1]-b[1]}); pairs.set(d, cells[0][0]+','+cells[0][1]+'|'+cells[1][0]+','+cells[1][1]); }
+      const rev = new Map();
+      for (const [d, key] of pairs) { if (!rev.has(key)) rev.set(key,[]); rev.get(key).push(d); }
+      for (const [key, digits] of rev) { if (digits.length===2) {
+        const maskToKeep = (1n << BigInt(digits[0]-1)) | (1n << BigInt(digits[1]-1));
+        for (const part of key.split('|')) { const [rr,cc] = part.split(',').map(Number); const toRemove = this.layers.getAllowedMask(rr,cc) & ~maskToKeep;
+          if (toRemove) { any = true; let m = toRemove; while (m) { const bit = m & (-m); this.layers.forbidChoice(bitLen(bit),rr,cc); m &= ~bit; } }
+        }
+      } }
+    }
+    return any;
+  }
+  _simpleColoring() {
+    let any = false; const N = this.size, bs = this.grid.boxSize, bsC = Math.floor(N/bs);
+    const aR = Array.from({length:N+1},()=>Array.from({length:N},()=>[]));
+    const aC = Array.from({length:N+1},()=>Array.from({length:N},()=>[]));
+    const aB = Array.from({length:N+1},()=>Array.from({length:N},()=>[]));
+    const aP = Array.from({length:N+1},()=>[]);
+    const allM = this.layers.getAllAllowedMasks();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { const mask = allM[r*N+c]; if (!mask) continue; const b = this.layers.getBoxIndex(r,c);
+      let curr = mask; while (curr) { const bit = curr & (-curr); const d = bitLen(bit); aR[d][r].push([r,c]); aC[d][c].push([r,c]); aB[d][b].push([r,c]); aP[d].push([r,c]); curr &= ~bit; }
+    }
+    for (let d = 1; d <= N; d++) {
+      const adj = new Map();
+      for (const ul of [aR[d],aC[d],aB[d]]) for (const cands of ul) if (cands.length===2) {
+        const u = cands[0][0]+','+cands[0][1], v = cands[1][0]+','+cands[1][1];
+        if (!adj.has(u)) adj.set(u,[]); if (!adj.has(v)) adj.set(v,[]); adj.get(u).push(v); adj.get(v).push(u);
+      }
+      if (!adj.size) continue;
+      const visited = new Map();
+      for (const start of adj.keys()) { if (visited.has(start)) continue;
+        const component = []; const queue = [[start,0]]; visited.set(start,0); let idx = 0;
+        while (idx < queue.length) { const [u,color] = queue[idx++]; component.push([u,color]); for (const v of adj.get(u)||[]) if (!visited.has(v)) { visited.set(v,1-color); queue.push([v,1-color]); } }
+        const cg = [[],[]]; for (const [cell,color] of component) cg[color].push(cell);
+        const sR = [new Set(), new Set()], sC = [new Set(), new Set()], sB = [new Set(), new Set()]; let inv = -1;
+        for (let color = 0; color <= 1; color++) for (const cell of cg[color]) { const [cr,cc] = cell.split(',').map(Number); const boxId = Math.floor(cr/bs)*bsC+Math.floor(cc/bs);
+          if (inv===-1 && (sR[color].has(cr)||sC[color].has(cc)||sB[color].has(boxId))) inv = color;
+          sR[color].add(cr); sC[color].add(cc); sB[color].add(boxId);
+        }
+        if (inv!==-1) { for (const cell of cg[inv]) { const [r,c] = cell.split(',').map(Number); this.layers.forbidChoice(d,r,c); any = true; } continue; }
+        const inComp = new Set(component.map(function(x){return x[0]}));
+        for (const [r,c] of aP[d]) { const key = r+','+c; if (inComp.has(key)) continue;
+          const boxId = Math.floor(r/bs)*bsC+Math.floor(c/bs);
+          if ((sR[0].has(r)||sC[0].has(c)||sB[0].has(boxId))&&(sR[1].has(r)||sC[1].has(c)||sB[1].has(boxId))) { this.layers.forbidChoice(d,r,c); any = true; }
+        }
+      }
+    }
+    return any;
+  }
+
+  _checkContradictions() {
+    const N = this.size, fm = this.layers.fullMask;
+    const rU = new Array(N).fill(0n), cU = new Array(N).fill(0n), bU = new Array(N).fill(0n);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (this.grid.isEmpty(r,c)) {
+      const mask = this.layers.getAllowedMask(r,c); if (mask === 0n) { this.vis.markContradiction(r, c); throw new Contradiction('('+r+','+c+') no candidates'); }
+      const b = this.layers.getBoxIndex(r,c); rU[r] |= mask; cU[c] |= mask; bU[b] |= mask;
+    }
+    for (let i = 0; i < N; i++) {
+      if ((rU[i]|this.layers.rowMasks[i])!==fm) throw new Contradiction('Row '+i+' missing');
+      if ((cU[i]|this.layers.colMasks[i])!==fm) throw new Contradiction('Col '+i+' missing');
+      if ((bU[i]|this.layers.boxMasks[i])!==fm) throw new Contradiction('Box '+i+' missing');
+    }
+  }
+}
+// ====== BranchingEngine (async with visual events) ======
+class BranchingEngine {
+  constructor(grid, layers, propagator, visQueue) {
+    this.grid = grid; this.layers = layers; this.propagator = propagator; this.vis = visQueue;
+    this.stateStack = new StateStack(); this.nodesVisited = 0;
+    var N = grid.size; this.restartThreshold = Math.max(N * 1000, N * N * 200);
+    this.tryCounts = new Map(); this.unitTryCounts = new Map(); this.hotPairCount = 0; this.decayFactor = 0.5;
+    this.stopFn = function(){return false}; this.lastAllMasks = [];
+  }
+  _selectBest() {
+    const N = this.grid.size; let min = N+1; let mrvCells = [];
+    const allM = this.layers.getAllAllowedMasks(); this.lastAllMasks = allM;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (this.grid.get(r,c)!==0) continue; const mask = allM[r*N+c]; const cnt = popcount(mask);
+      if (cnt===0) throw new Contradiction('('+r+','+c+') no candidates');
+      if (cnt < min) { min = cnt; mrvCells = [{r,c,mask}]; } else if (cnt===min) mrvCells.push({r,c,mask});
+    }
+    this.nodesVisited++; if (this.nodesVisited > this.restartThreshold) throw new SearchRestart('restart');
+    if (!mrvCells.length) return null;
+    let best = null, maxP = -1; const bs = this.grid.boxSize;
+    for (const cell of mrvCells) {
+      const deg = this.layers.getCellDegree(cell.r,cell.c); const digits = maskToList(cell.mask);
+      let heat = 0; for (const d of digits) heat += this.tryCounts.get(cell.r+','+cell.c+','+d)||0;
+      const boxId = Math.floor(cell.r/bs)*bs + Math.floor(cell.c/bs); let uh = 0;
+      for (const d of digits) { uh += this.unitTryCounts.get('0,'+cell.r+','+d)||0; uh += this.unitTryCounts.get('1,'+cell.c+','+d)||0; uh += this.unitTryCounts.get('2,'+boxId+','+d)||0; }
+      const p = deg*1000+heat*200+uh*100; if (p > maxP) { maxP = p; best = cell; }
+    }
+    return best;
+  }
+  _checkStag(r,c,d) {
+    const key = r+','+c+','+d; const old = this.tryCounts.get(key)||0; const next = old+1; this.tryCounts.set(key,next);
+    var N = this.grid.size;
+    if (next > Math.max(15, N * 2)) throw new SearchRestart('stagnation');
+    if (old <= 5 && next > 5) this.hotPairCount++;
+    if (this.hotPairCount > Math.max(40, Math.floor(N * N / 10))) throw new SearchRestart('global stagnation');
+  }
+  _recordFail(r,c,d) {
+    const boxId = Math.floor(r/this.grid.boxSize)*this.grid.boxSize+Math.floor(c/this.grid.boxSize);
+    const k0='0,'+r+','+d,k1='1,'+c+','+d,k2='2,'+boxId+','+d;
+    this.unitTryCounts.set(k0,(this.unitTryCounts.get(k0)||0)+1);
+    this.unitTryCounts.set(k1,(this.unitTryCounts.get(k1)||0)+1);
+    this.unitTryCounts.set(k2,(this.unitTryCounts.get(k2)||0)+1);
+  }
+  _orderLcv(r,c,digits,allM) {
+    const N = this.grid.size, bs = this.grid.boxSize, br = Math.floor(r/bs)*bs, bc2 = Math.floor(c/bs)*bs;
+    const boxId = Math.floor(r/bs)*bs+Math.floor(c/bs); const scored = [];
+    for (const d of digits) { const bit = 1n << BigInt(d-1); let el = 0;
+      for (let i = 0; i < N; i++) { if (i!==c && (allM[r*N+i]&bit)) el++; if (i!==r && (allM[i*N+c]&bit)) el++; }
+      for (let dr = 0; dr < bs; dr++) for (let dc = 0; dc < bs; dc++) { const rr=br+dr,cc=bc2+dc; if ((rr!==r||cc!==c)&&rr!==r&&cc!==c&&(allM[rr*N+cc]&bit)) el++; }
+      const uf = (this.unitTryCounts.get('0,'+r+','+d)||0)+(this.unitTryCounts.get('1,'+c+','+d)||0)+(this.unitTryCounts.get('2,'+boxId+','+d)||0);
+      scored.push([uf,el,d]);
+    }
+    scored.sort(function(a,b){return a[0]-b[0]||a[1]-b[1]}); return scored.map(function(x){return x[2]});
+  }
+
+  async solveWithBranchingAsync(yieldFn) {
+    let best; try { best = this._selectBest(); } catch(e) { if (e instanceof Contradiction) return false; throw e; }
+    if (!best) return this.isSolved();
+    let allowed = maskToList(best.mask); allowed = this._orderLcv(best.r,best.c,allowed,this.lastAllMasks);
+
+    this.vis.markBranchSelect(best.r, best.c);
+    await yieldFn();
+
+    const stack = [{r:best.r,c:best.c,digits:allowed,idx:0}];
+
+    while (stack.length) {
+      if (this.stopFn()) return false;
+      const cur = stack[stack.length-1]; const r = cur.r, c = cur.c, digits = cur.digits;
+
+      if (cur.idx < digits.length) {
+        const d = digits[cur.idx]; cur.idx++;
+        this._checkStag(r,c,d);
+        this.stateStack.push(this.layers.saveState());
+
+        const N = this.grid.size;
+        const filledBefore = new Set();
+        for (let i = 0; i < N * N; i++) if (this.grid.values[i] !== 0) filledBefore.add(i);
+
+        this.grid.set(r,c,d); this.layers.updateMasks(r,c,d,true);
+        this.vis.markGuess(r, c, d);
+        await yieldFn();
+
+        try {
+          this.propagator.runPropagation(this.stopFn);
+          await yieldFn();
+
+          const bn = this._selectBest(); if (!bn) return true;
+          let an = maskToList(bn.mask); an = this._orderLcv(bn.r,bn.c,an,this.lastAllMasks);
+          this.vis.markBranchSelect(bn.r, bn.c);
+          await yieldFn();
+          stack.push({r:bn.r,c:bn.c,digits:an,idx:0});
+        } catch(e) {
+          if (e instanceof Contradiction) {
+            await yieldFn();
+            const state = this.stateStack.pop();
+            const clearedCells = [];
+            for (let i = 0; i < N * N; i++) {
+              if (this.grid.values[i] !== 0 && state.gridValues[i] === 0) {
+                clearedCells.push({r: Math.floor(i / N), c: i % N});
+              }
+            }
+            this.layers.restoreState(state);
+            if (clearedCells.length) { this.vis.markBacktrack(clearedCells); await yieldFn(); }
+            this._recordFail(r,c,d);
+          } else throw e;
+        }
+      } else {
+        stack.pop();
+        if (stack.length) {
+          const N = this.grid.size;
+          const state = this.stateStack.pop();
+          const clearedCells = [];
+          for (let i = 0; i < N * N; i++) {
+            if (this.grid.values[i] !== 0 && state.gridValues[i] === 0) {
+              clearedCells.push({r: Math.floor(i / N), c: i % N});
+            }
+          }
+          this.layers.restoreState(state);
+          if (clearedCells.length) { this.vis.markBacktrack(clearedCells); await yieldFn(); }
+          const last = stack[stack.length-1]; this._recordFail(last.r,last.c,last.digits[last.idx-1]);
+        }
+      }
+    }
+    return false;
+  }
+
+  decayCounts() {
+    let hot = 0; for (const [k,v] of this.tryCounts) { const d = v*this.decayFactor; if (d<0.1) this.tryCounts.delete(k); else { this.tryCounts.set(k,d); if (d>5) hot++; } }
+    this.hotPairCount = hot;
+    for (const [k,v] of this.unitTryCounts) { const d = v*this.decayFactor; if (d<0.1) this.unitTryCounts.delete(k); else this.unitTryCounts.set(k,d); }
+  }
+  isSolved() { for (let i = 0; i < this.grid.values.length; i++) if (this.grid.values[i]===0) return false; return true; }
+}
+// ====== Puzzle Generator ======
+class PuzzleRng {
+  constructor(seed) { this.s = new Uint32Array(4); this.s[0] = seed>>>0; this.s[1] = (seed*1664525+1013904223)>>>0; this.s[2] = (this.s[1]*1664525+1013904223)>>>0; this.s[3] = (this.s[2]*1664525+1013904223)>>>0; }
+  next() { const s = this.s; const result = (((s[1]*5)<<7|(s[1]*5)>>>25)*9)>>>0; const t = s[1]<<9; s[2]^=s[0]; s[3]^=s[1]; s[1]^=s[2]; s[0]^=s[3]; s[2]^=t; s[3]=(s[3]<<11|s[3]>>>21); return result; }
+  random() { return this.next()/0x100000000; }
+  shuffle(arr) { for (let i = arr.length-1; i > 0; i--) { const j = this.next()%(i+1); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+}
+
+function buildFullSolution(size, box, rng) {
+  var base = Array.from({length:size},function(){return new Array(size)});
+  for (let r = 0; r < size; r++) { const shift = (r*box+Math.floor(r/box))%size; for (let c = 0; c < size; c++) base[r][c] = (shift+c)%size+1; }
+  var digits = Array.from({length:size},function(_,i){return i+1}); rng.shuffle(digits);
+  var mapping = new Map(); for (let i = 0; i < size; i++) mapping.set(i+1, digits[i]);
+  for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) base[r][c] = mapping.get(base[r][c]);
+  for (let b = 0; b < box; b++) { var rows = Array.from({length:box},function(_,i){return b*box+i}); rng.shuffle(rows); var nb = rows.map(function(r){return base[r].slice()}); for (let i = 0; i < box; i++) base[b*box+i] = nb[i]; }
+  for (let b = 0; b < box; b++) { var cols = Array.from({length:box},function(_,i){return b*box+i}); rng.shuffle(cols); for (let r = 0; r < size; r++) { var rc = base[r].slice(); for (let i = 0; i < box; i++) base[r][b*box+i] = rc[cols[i]]; } }
+  return base;
+}
+
+function generatePuzzle(size, density, seed) {
+  var box = Math.round(Math.sqrt(size));
+  var rng = new PuzzleRng(seed || Math.floor(Math.random() * 1000000));
+  var base = buildFullSolution(size, box, rng);
+  var puzzle = Array.from({length:size},function(){return new Array(size).fill(0)});
+  for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (rng.random() < density) puzzle[r][c] = base[r][c];
+  return puzzle;
+}
+
+function generateByRemoval(size, density, seed) {
+  var box = Math.round(Math.sqrt(size));
+  var rng = new PuzzleRng(seed);
+  var base = buildFullSolution(size, box, rng);
+  var N = size;
+  var totalCells = N * N;
+  var targetRemovals = totalCells - Math.round(totalCells * density);
+  var maxBlanks = Math.min(Math.ceil(N * (1 - density)) + 1, N - box);
+  var puzzle = base.map(function(row){return row.slice()});
+  var rowB = new Int32Array(N), colB = new Int32Array(N), boxB = new Int32Array(N);
+  var positions = [];
+  for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) positions.push([r,c]);
+  rng.shuffle(positions);
+  var removed = 0;
+  for (var p = 0; p < positions.length; p++) {
+    if (removed >= targetRemovals) break;
+    var pr = positions[p][0], pc = positions[p][1];
+    var b = Math.floor(pr/box)*box + Math.floor(pc/box);
+    if (rowB[pr] >= maxBlanks || colB[pc] >= maxBlanks || boxB[b] >= maxBlanks) continue;
+    puzzle[pr][pc] = 0;
+    rowB[pr]++; colB[pc]++; boxB[b]++;
+    removed++;
+  }
+  return puzzle;
+}
+
+function ratePuzzleDifficulty(size, puzzle) {
+  try {
+    var grid = new Grid(size, puzzle);
+    var layers = new LayerManager(grid);
+    var vis = new VisualQueue();
+    var propagator = new Propagator(grid, layers, vis);
+    layers.rebuildAllLayers();
+    try { propagator.runPropagation(function(){return false}); } catch(e) { if (e instanceof Contradiction) return size * size; }
+    var allM = layers.getAllAllowedMasks();
+    var N = size; var ambiguous = 0;
+    for (var i = 0; i < N * N; i++) {
+      if (grid.values[i] === 0 && popcount(allM[i]) >= 2) ambiguous++;
+    }
+    return ambiguous;
+  } catch(e) { return size * size; }
+}
+
+function generateBestPuzzle(size, density) {
+  var candidates = size >= 25 ? 8 : (size >= 16 ? 5 : 3);
+  var bestPuzzle = null;
+  var bestScore = Infinity;
+  for (var i = 0; i < candidates; i++) {
+    var seed = 52 * (i + 1);
+    var puzzle = generateByRemoval(size, density, seed);
+    var score = ratePuzzleDifficulty(size, puzzle);
+    if (score < bestScore) { bestScore = score; bestPuzzle = puzzle; }
+    if (score === 0) break;
+  }
+  return bestPuzzle;
+}
+
+function digitToSymbol(d) {
+  if (d >= 1 && d <= 9) return String(d);
+  if (d >= 10 && d <= 35) return String.fromCharCode(65+d-10);
+  if (d >= 36 && d <= 61) return String.fromCharCode(97+d-36);
+  return d > 0 ? String(d) : '';
+}
+
+function generateDigitColors(n) {
+  const colors = new Map();
+  for (let d = 1; d <= n; d++) {
+    const t = (d-1)/Math.max(1,n-1);
+    const r = 0.5+0.5*Math.sin(2*Math.PI*(t+0.0));
+    const g = 0.5+0.5*Math.sin(2*Math.PI*(t+1/3));
+    const b = 0.5+0.5*Math.sin(2*Math.PI*(t+2/3));
+    colors.set(d, 'rgb('+Math.round(r*255)+','+Math.round(g*255)+','+Math.round(b*255)+')');
+  }
+  return colors;
+}
+// ====== Visual Renderer ======
+class GridRenderer {
+  constructor(canvasEl) {
+    this.canvas = canvasEl;
+    this.ctx = canvasEl.getContext('2d');
+    this.size = 9;
+    this.cellSize = 40;
+    this.colors = generateDigitColors(9);
+    this.originalCells = new Set();
+    this.cellHighlights = {};
+    this.flashDuration = 400;
+    this.zoomPct = 100;
+  }
+
+  setup(size, puzzle, originalCells) {
+    this.size = size;
+    this.colors = generateDigitColors(size);
+    this.originalCells = originalCells;
+    this.cellHighlights = {};
+    this.puzzle = puzzle;
+    this._resize();
+  }
+
+  _resize() {
+    var baseDim = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.6, 800);
+    var baseCell = Math.max(12, Math.floor(baseDim / this.size));
+    this.cellSize = Math.max(8, Math.round(baseCell * this.zoomPct / 100));
+    var gridPx = this.cellSize * this.size;
+    this.canvas.width = gridPx + 4;
+    this.canvas.height = gridPx + 4;
+  }
+
+  setZoom(pct) {
+    this.zoomPct = Math.max(50, Math.min(250, pct));
+    this._resize();
+  }
+
+  applyEvents(events) {
+    const now = performance.now();
+    for (const evt of events) {
+      const key = function(r, c) { return r+','+c; };
+      switch (evt.type) {
+        case VIS_FORCED:
+          this.cellHighlights[key(evt.r, evt.c)] = { type: 'forced', time: now, digit: evt.d };
+          break;
+        case VIS_GUESS:
+          this.cellHighlights[key(evt.r, evt.c)] = { type: 'guess', time: now, digit: evt.d };
+          break;
+        case VIS_CONTRADICTION:
+          this.cellHighlights[key(evt.r, evt.c)] = { type: 'contradiction', time: now };
+          break;
+        case VIS_BRANCH_SELECT:
+          this.cellHighlights[key(evt.r, evt.c)] = { type: 'branch', time: now };
+          break;
+        case VIS_BACKTRACK:
+          for (const cell of evt.cells) {
+            this.cellHighlights[key(cell.r, cell.c)] = { type: 'backtrack', time: now };
+          }
+          break;
+      }
+    }
+  }
+
+  draw(gridValues) {
+    const N = this.size;
+    const cs = this.cellSize;
+    const ctx = this.ctx;
+    const now = performance.now();
+    const bs = Math.round(Math.sqrt(N));
+    const fontSize = Math.max(8, Math.floor(cs * 0.55));
+
+    ctx.fillStyle = '#1e1e3a';
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        const x = 2 + c * cs;
+        const y = 2 + r * cs;
+        const key = r+','+c;
+        const isOriginal = this.originalCells.has(key);
+        const v = Array.isArray(gridValues) ? gridValues[r][c] : gridValues[r * N + c];
+        const hl = this.cellHighlights[key];
+        const hlAge = hl ? (now - hl.time) : Infinity;
+        const hlActive = hlAge < this.flashDuration;
+        const hlFade = hlActive ? Math.max(0, 1 - hlAge / this.flashDuration) : 0;
+
+        // Cell background
+        var bgColor;
+        if (isOriginal) {
+          bgColor = '#3a3a6a';
+        } else if (hl && hl.type === 'forced' && hlAge < this.flashDuration * 2) {
+          var gv = Math.max(0, 1 - hlAge / (this.flashDuration * 2));
+          bgColor = 'rgb('+Math.round(20+10*gv)+','+Math.round(90+50*gv)+','+Math.round(40+20*gv)+')';
+        } else if (hl && hl.type === 'guess' && hlAge < this.flashDuration * 2) {
+          var gv2 = Math.max(0, 1 - hlAge / (this.flashDuration * 2));
+          bgColor = 'rgb('+Math.round(140+60*gv2)+','+Math.round(100+44*gv2)+','+Math.round(15+15*gv2)+')';
+        } else if (hl && hl.type === 'backtrack' && hlAge < this.flashDuration * 1.5) {
+          var fade = Math.max(0, 1 - hlAge / (this.flashDuration * 1.5));
+          bgColor = 'rgb('+Math.round(120+56*fade)+','+Math.round(40+24*fade)+','+Math.round(160+64*fade)+')';
+        } else if (v !== 0 && !isOriginal) {
+          bgColor = '#1a5a30';
+        } else {
+          bgColor = '#12122e';
+        }
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(x, y, cs, cs);
+
+        // Highlight border for active effects
+        if (hlActive) {
+          var borderColor = null;
+          var borderWidth = 2;
+          if (hl.type === 'forced') { borderColor = 'rgba(50,255,100,'+hlFade*0.95+')'; borderWidth = 2.5; }
+          else if (hl.type === 'guess') { borderColor = 'rgba(255,180,0,'+hlFade*0.95+')'; borderWidth = 3; }
+          else if (hl.type === 'contradiction') { borderColor = 'rgba(255,40,40,'+hlFade+')'; borderWidth = 3.5; }
+          else if (hl.type === 'branch') { borderColor = 'rgba(0,220,255,'+hlFade*0.95+')'; borderWidth = 3; }
+          else if (hl.type === 'backtrack') { borderColor = 'rgba(200,60,255,'+hlFade*0.9+')'; borderWidth = 2.5; }
+          if (borderColor) {
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = borderWidth;
+            ctx.strokeRect(x + 1, y + 1, cs - 2, cs - 2);
+          }
+        }
+
+        // Thin cell border
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x, y, cs, cs);
+
+        // Digit
+        if (v !== 0) {
+          if (hlActive && (hl.type === 'forced' || hl.type === 'guess')) {
+            var whiteBlend = hlFade * 0.6;
+            ctx.fillStyle = 'rgba(255,255,255,'+whiteBlend+')';
+            ctx.font = 'bold '+( fontSize + 2)+'px "Segoe UI", monospace';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(digitToSymbol(v), x + cs / 2, y + cs / 2 + 1);
+          }
+
+          var digitColor = isOriginal ? '#bbb' : (this.colors.get(v) || '#8f8');
+          var isGuess = hl && hl.type === 'guess' && hlAge < this.flashDuration * 3;
+          ctx.fillStyle = digitColor;
+          ctx.font = (isOriginal ? 'bold ' : (isGuess ? 'italic bold ' : '')) + fontSize + 'px "Segoe UI", monospace';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(digitToSymbol(v), x + cs / 2, y + cs / 2 + 1);
+        }
+      }
+    }
+
+    // Bold box borders
+    ctx.strokeStyle = '#6cf';
+    ctx.lineWidth = 2;
+    var gridPx = cs * N;
+    for (let br = 0; br <= N / bs; br++) {
+      var yy = 2 + br * bs * cs;
+      ctx.beginPath(); ctx.moveTo(2, yy); ctx.lineTo(gridPx + 2, yy); ctx.stroke();
+    }
+    for (let bc2 = 0; bc2 <= N / bs; bc2++) {
+      var xx = 2 + bc2 * bs * cs;
+      ctx.beginPath(); ctx.moveTo(xx, 2); ctx.lineTo(xx, gridPx + 2); ctx.stroke();
+    }
+  }
+}
+// ====== UI Logic ======
+var currentSize = 9;
+var currentPuzzle = null;
+var solving = false;
+var solver = null;
+var visQueue = new VisualQueue();
+var renderer = new GridRenderer(document.getElementById('canvas'));
+var liveGrid = null;
+
+var defaultDensity = {9:45,16:50,25:55,36:60,49:65,64:70};
+var speedLabels = ['Slowest', 'Slow', 'Medium', 'Fast', 'Instant'];
+var speedDelays = [120, 50, 15, 3, 0];
+
+var statusEl = document.getElementById('status');
+var densitySlider = document.getElementById('density');
+var densityVal = document.getElementById('density-val');
+var speedControl = document.getElementById('speed-control');
+var speedVal = document.getElementById('speed-val');
+var btnNew = document.getElementById('btn-new');
+var btnSolve = document.getElementById('btn-solve');
+var btnStop = document.getElementById('btn-stop');
+var sizeButtons = document.querySelectorAll('.size-btn');
+var zoomSlider = document.getElementById('zoom-slider');
+var zoomValEl = document.getElementById('zoom-val');
+var btnZoomIn = document.getElementById('zoom-in');
+var btnZoomOut = document.getElementById('zoom-out');
+var btnZoomFit = document.getElementById('zoom-fit');
+
+function getDelay() { return speedDelays[parseInt(speedControl.value)]; }
+
+densitySlider.addEventListener('input', function() { densityVal.textContent = densitySlider.value + '%'; });
+speedControl.addEventListener('input', function() { speedVal.textContent = speedLabels[parseInt(speedControl.value)]; });
+
+function applyZoom(pct) {
+  renderer.setZoom(pct);
+  zoomSlider.value = renderer.zoomPct;
+  zoomValEl.textContent = renderer.zoomPct + '%';
+  var data = solving && liveGrid ? liveGrid.values : currentPuzzle;
+  if (data) renderer.draw(data);
+}
+zoomSlider.addEventListener('input', function() { applyZoom(parseInt(zoomSlider.value)); });
+btnZoomIn.addEventListener('click', function() { applyZoom(renderer.zoomPct + 20); });
+btnZoomOut.addEventListener('click', function() { applyZoom(renderer.zoomPct - 20); });
+btnZoomFit.addEventListener('click', function() { applyZoom(100); });
+
+sizeButtons.forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    if (solving) return;
+    sizeButtons.forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    currentSize = parseInt(btn.dataset.size);
+    densitySlider.value = defaultDensity[currentSize] || 50;
+    densityVal.textContent = densitySlider.value + '%';
+    newGrid();
+  });
+});
+
+btnNew.addEventListener('click', function() { if (!solving) newGrid(); });
+btnSolve.addEventListener('click', solvePuzzle);
+btnStop.addEventListener('click', function() { if (solver) solver.stopRequested = true; });
+
+function newGrid() {
+  var density = parseInt(densitySlider.value) / 100;
+  statusEl.textContent = 'Generating '+currentSize+'\u00d7'+currentSize+' puzzle...';
+  statusEl.style.color = '#ff0';
+  currentPuzzle = generateBestPuzzle(currentSize, density);
+  var originalCells = new Set();
+  for (var r = 0; r < currentSize; r++)
+    for (var c = 0; c < currentSize; c++)
+      if (currentPuzzle[r][c] !== 0) originalCells.add(r+','+c);
+  renderer.setup(currentSize, currentPuzzle, originalCells);
+  renderer.draw(currentPuzzle);
+  visQueue = new VisualQueue();
+  liveGrid = null;
+  zoomSlider.value = renderer.zoomPct;
+  zoomValEl.textContent = renderer.zoomPct + '%';
+  statusEl.textContent = 'Generated '+currentSize+'\u00d7'+currentSize+' puzzle';
+  statusEl.style.color = '#8f8';
+}
+
+async function solvePuzzle() {
+  if (!currentPuzzle || solving) return;
+  solving = true;
+  btnSolve.disabled = true;
+  btnStop.disabled = false;
+  btnNew.disabled = true;
+  sizeButtons.forEach(function(b) { b.disabled = true; });
+  statusEl.textContent = 'Solving...';
+  statusEl.style.color = '#ff0';
+
+  visQueue = new VisualQueue();
+  solver = { stopRequested: false };
+
+  var stepsSinceYield = 0;
+  var batchSize = currentSize <= 9 ? 1 : (currentSize <= 16 ? 2 : (currentSize <= 25 ? 4 : 8));
+
+  var yieldToUI = function() {
+    return new Promise(function(resolve) {
+      stepsSinceYield++;
+      var delay = getDelay();
+
+      if (delay === 0 && stepsSinceYield < batchSize * 4) { resolve(); return; }
+      stepsSinceYield = 0;
+
+      var events = visQueue.drain();
+      if (events.length) renderer.applyEvents(events);
+
+      if (liveGrid) {
+        renderer.draw(liveGrid.values);
+        statusEl.textContent = 'Solving... ('+visQueue.stepCount+' steps)';
+      }
+
+      if (delay === 0) {
+        requestAnimationFrame(function() { resolve(); });
+      } else {
+        setTimeout(function() { resolve(); }, delay);
+      }
+    });
+  };
+
+  var startTime = performance.now();
+
+  try {
+    var grid = new Grid(currentSize, currentPuzzle);
+    var layers = new LayerManager(grid);
+    var propagator = new Propagator(grid, layers, visQueue);
+    var engine = new BranchingEngine(grid, layers, propagator, visQueue);
+    engine.stopFn = function() { return solver.stopRequested; };
+    liveGrid = grid;
+
+    layers.rebuildAllLayers();
+    try { propagator.runPropagation(function() { return solver.stopRequested; }); await yieldToUI(); }
+    catch(e) { if (!(e instanceof Contradiction)) throw e; }
+
+    if (!solver.stopRequested && !engine.isSolved()) {
+      var maxRestarts = Math.max(5, Math.floor(currentSize / 3));
+      var solved = false;
+      for (var attempt = 0; attempt < maxRestarts; attempt++) {
+        if (solver.stopRequested) break;
+        try {
+          if (await engine.solveWithBranchingAsync(yieldToUI)) { solved = true; break; }
+          else break;
+        } catch(e) {
+          if (e instanceof SearchRestart) {
+            if (solver.stopRequested) break;
+            var savedTryCounts = engine.tryCounts;
+            var savedUnitTryCounts = engine.unitTryCounts;
+            var savedHotPairCount = engine.hotPairCount;
+            engine.decayCounts();
+            grid = new Grid(currentSize, currentPuzzle);
+            layers = new LayerManager(grid);
+            propagator = new Propagator(grid, layers, visQueue);
+            engine = new BranchingEngine(grid, layers, propagator, visQueue);
+            engine.stopFn = function() { return solver.stopRequested; };
+            engine.tryCounts = savedTryCounts;
+            engine.unitTryCounts = savedUnitTryCounts;
+            engine.hotPairCount = savedHotPairCount;
+            liveGrid = grid;
+            layers.rebuildAllLayers();
+            try { propagator.runPropagation(function() { return solver.stopRequested; }); await yieldToUI(); }
+            catch(e2) { if (!(e2 instanceof Contradiction)) throw e2; }
+          } else throw e;
+        }
+      }
+    }
+
+    var elapsed = (performance.now() - startTime) / 1000;
+    var finalEvents = visQueue.drain();
+    if (finalEvents.length) renderer.applyEvents(finalEvents);
+
+    if (engine.isSolved()) {
+      renderer.draw(grid.values);
+      statusEl.textContent = 'Solved in '+elapsed.toFixed(3)+'s ('+visQueue.stepCount+' steps)';
+      statusEl.style.color = '#8f8';
+    } else {
+      if (liveGrid) renderer.draw(liveGrid.values);
+      statusEl.textContent = solver.stopRequested ? 'Stopped by user.' : 'No solution found.';
+      statusEl.style.color = '#f88';
+    }
+  } catch(err) {
+    statusEl.textContent = 'Error: ' + err.message;
+    statusEl.style.color = '#f88';
+    console.error(err);
+  }
+
+  solving = false;
+  btnSolve.disabled = false;
+  btnStop.disabled = true;
+  btnNew.disabled = false;
+  sizeButtons.forEach(function(b) { b.disabled = false; });
+}
+
+newGrid();
+
+window.addEventListener('resize', function() {
+  if (!solving && currentPuzzle) {
+    renderer._resize();
+    renderer.draw(currentPuzzle);
+  }
+});
+</script>
+</body>
+</html>

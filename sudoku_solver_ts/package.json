@@ -1,0 +1,21 @@
+{
+  "name": "sudoku-solver",
+  "version": "1.0.0",
+  "description": "High-performance multi-size Sudoku solver with web UI. Supports 9x9 through 49x49 puzzles.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "sudoku-solver": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "tsc --watch",
+    "serve": "tsc && node dist/serve.js"
+  },
+  "keywords": ["sudoku", "solver", "constraint-propagation", "backtracking"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

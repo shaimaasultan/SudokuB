@@ -7,9 +7,9 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 [![Platform](https://img.shields.io/badge/Platform-Browser%20%7C%20Node.js-green)](#quick-start)
-[![Grid Sizes](https://img.shields.io/badge/Grids-9×9%20to%2064×64-blue)](#solver-features)
+[![Grid Sizes](https://img.shields.io/badge/Grids-9×9%20to%20256×256-blue)](#solver-features)
 
-**9×9** · **16×16** · **25×25** · **36×36** · **49×49** · **64×64**
+**9×9** · **16×16** · **25×25** · **36×36** · **49×49** · **64×64** · **81×81** · **256×256**
 
 *Zero install — open in any browser and start solving*
 

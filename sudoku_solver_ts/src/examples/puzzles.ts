@@ -157,9 +157,17 @@ export function examplePuzzle64(density = 0.7): number[][] {
   return generateDynamicPuzzle(64, 8, density);
 }
 
+export function examplePuzzle81(density = 0.75): number[][] {
+  return generateDynamicPuzzle(81, 9, density);
+}
+
+export function examplePuzzle256(density = 0.85): number[][] {
+  return generateDynamicPuzzle(256, 16, density);
+}
+
 export function generatePuzzle(size: number, density?: number): number[][] {
   const box = Math.round(Math.sqrt(size));
-  const defaultDensity: Record<number, number> = { 9: 0.45, 16: 0.5, 25: 0.55, 36: 0.6, 49: 0.65, 64: 0.7 };
+  const defaultDensity: Record<number, number> = { 9: 0.45, 16: 0.5, 25: 0.55, 36: 0.6, 49: 0.65, 64: 0.7, 81: 0.75, 256: 0.85 };
   return generateDynamicPuzzle(size, box, density ?? defaultDensity[size] ?? 0.5);
 }
 
@@ -204,9 +212,9 @@ export function ratePuzzleDifficulty(size: number, puzzle: number[][]): number {
  */
 export function generateBestPuzzle(size: number, density?: number): number[][] {
   const box = Math.round(Math.sqrt(size));
-  const defaultDensity: Record<number, number> = { 9: 0.45, 16: 0.5, 25: 0.55, 36: 0.6, 49: 0.65, 64: 0.7 };
+  const defaultDensity: Record<number, number> = { 9: 0.45, 16: 0.5, 25: 0.55, 36: 0.6, 49: 0.65, 64: 0.7, 81: 0.75, 256: 0.85 };
   const d = density ?? defaultDensity[size] ?? 0.5;
-  const candidates = size >= 25 ? 8 : (size >= 16 ? 5 : 3);
+  const candidates = size >= 81 ? 2 : (size >= 25 ? 8 : (size >= 16 ? 5 : 3));
   let bestPuzzle: number[][] | null = null;
   let bestScore = Infinity;
 

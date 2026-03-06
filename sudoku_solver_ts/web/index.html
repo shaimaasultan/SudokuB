@@ -124,7 +124,7 @@
 <body>
 
 <h1>Sudoku Solver</h1>
-<p class="subtitle">TypeScript &mdash; supports 9&times;9 through 64&times;64 with real-time visualization</p>
+<p class="subtitle">TypeScript &mdash; supports 9&times;9 through 256&times;256 with real-time visualization</p>
 
 <div class="controls">
   <button class="size-btn active" data-size="9">9</button>
@@ -133,6 +133,8 @@
   <button class="size-btn" data-size="36">36</button>
   <button class="size-btn" data-size="49">49</button>
   <button class="size-btn" data-size="64">64</button>
+  <button class="size-btn" data-size="81">81</button>
+  <button class="size-btn" data-size="256">256</button>
   <span style="width:16px"></span>
   <label>Density: <span id="density-val">50%</span></label>
   <input type="range" id="density" min="10" max="90" value="50" step="5">
@@ -143,6 +145,7 @@
   <button id="btn-new">NEW GRID</button>
   <button id="btn-solve">SOLVE</button>
   <button id="btn-stop" disabled>STOP</button>
+  <button id="btn-export" disabled>EXPORT</button>
 </div>
 
 <div class="legend">
@@ -191,14 +194,18 @@ class Grid {
 }
 
 // ====== LayerManager ======
+function createMasks(len, useTyped) { return useTyped ? new BigUint64Array(len) : new Array(len).fill(0n); }
+function copyMasksInto(dst, src) { if (dst instanceof BigUint64Array) dst.set(src); else for (var i = 0; i < dst.length; i++) dst[i] = src[i]; }
+
 class LayerManager {
   constructor(grid, skipRebuild = false) {
     this.grid = grid; this.size = grid.size;
     this.fullMask = (1n << BigInt(this.size)) - 1n;
-    this.rowMasks = new BigUint64Array(this.size);
-    this.colMasks = new BigUint64Array(this.size);
-    this.boxMasks = new BigUint64Array(this.size);
-    this.manualMasks = new BigUint64Array(this.size * this.size);
+    var useTyped = this.size <= 64;
+    this.rowMasks = createMasks(this.size, useTyped);
+    this.colMasks = createMasks(this.size, useTyped);
+    this.boxMasks = createMasks(this.size, useTyped);
+    this.manualMasks = createMasks(this.size * this.size, useTyped);
     const N = this.size, bs = grid.boxSize;
     this.boxIdx = new Int32Array(N * N);
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) this.boxIdx[r * N + c] = Math.floor(r / bs) * Math.floor(N / bs) + Math.floor(c / bs);
@@ -246,7 +253,7 @@ class LayerManager {
     return count;
   }
   saveState() { return { gridValues: this.grid.values.slice(), rowMasks: this.rowMasks.slice(), colMasks: this.colMasks.slice(), boxMasks: this.boxMasks.slice(), manualMasks: this.manualMasks.slice() }; }
-  restoreState(s) { this.grid.values.set(s.gridValues); this.rowMasks.set(s.rowMasks); this.colMasks.set(s.colMasks); this.boxMasks.set(s.boxMasks); this.manualMasks.set(s.manualMasks); }
+  restoreState(s) { this.grid.values.set(s.gridValues); copyMasksInto(this.rowMasks, s.rowMasks); copyMasksInto(this.colMasks, s.colMasks); copyMasksInto(this.boxMasks, s.boxMasks); copyMasksInto(this.manualMasks, s.manualMasks); }
 }
 
 // ====== Exceptions ======
@@ -676,7 +683,7 @@ function ratePuzzleDifficulty(size, puzzle) {
 }
 
 function generateBestPuzzle(size, density) {
-  var candidates = size >= 25 ? 8 : (size >= 16 ? 5 : 3);
+  var candidates = size >= 81 ? 2 : (size >= 25 ? 8 : (size >= 16 ? 5 : 3));
   var bestPuzzle = null;
   var bestScore = Infinity;
   for (var i = 0; i < candidates; i++) {
@@ -732,7 +739,8 @@ class GridRenderer {
 
   _resize() {
     var baseDim = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.6, 800);
-    var baseCell = Math.max(12, Math.floor(baseDim / this.size));
+    var minCell = this.size > 64 ? 4 : 12;
+    var baseCell = Math.max(minCell, Math.floor(baseDim / this.size));
     this.cellSize = Math.max(8, Math.round(baseCell * this.zoomPct / 100));
     var gridPx = this.cellSize * this.size;
     this.canvas.width = gridPx + 4;
@@ -836,7 +844,7 @@ class GridRenderer {
         ctx.strokeRect(x, y, cs, cs);
 
         // Digit
-        if (v !== 0) {
+        if (v !== 0 && cs >= 10) {
           if (hlActive && (hl.type === 'forced' || hl.type === 'guess')) {
             var whiteBlend = hlFade * 0.6;
             ctx.fillStyle = 'rgba(255,255,255,'+whiteBlend+')';
@@ -878,9 +886,11 @@ var visQueue = new VisualQueue();
 var renderer = new GridRenderer(document.getElementById('canvas'));
 var liveGrid = null;
 
-var defaultDensity = {9:45,16:50,25:55,36:60,49:65,64:70};
+var defaultDensity = {9:45,16:50,25:55,36:60,49:65,64:70,81:75,256:85};
 var speedLabels = ['Slowest', 'Slow', 'Medium', 'Fast', 'Instant'];
 var speedDelays = [120, 50, 15, 3, 0];
+
+var btnExport = document.getElementById('btn-export');
 
 var statusEl = document.getElementById('status');
 var densitySlider = document.getElementById('density');
@@ -929,6 +939,69 @@ sizeButtons.forEach(function(btn) {
 btnNew.addEventListener('click', function() { if (!solving) newGrid(); });
 btnSolve.addEventListener('click', solvePuzzle);
 btnStop.addEventListener('click', function() { if (solver) solver.stopRequested = true; });
+btnExport.addEventListener('click', exportGrid);
+
+function exportGrid() {
+  var gridValues = liveGrid ? liveGrid.values : currentPuzzle;
+  if (!gridValues) return;
+  var N = currentSize;
+  var bs = Math.round(Math.sqrt(N));
+  var cs = Math.max(32, Math.min(60, Math.floor(2400 / N)));
+  var pad = 4;
+  var gridPx = cs * N + pad * 2;
+  var offCanvas = document.createElement('canvas');
+  offCanvas.width = gridPx;
+  offCanvas.height = gridPx;
+  var ctx = offCanvas.getContext('2d');
+  var fontSize = Math.max(10, Math.floor(cs * 0.55));
+  var colors = generateDigitColors(N);
+  var origSet = renderer.originalCells;
+
+  // Background
+  ctx.fillStyle = '#1e1e3a';
+  ctx.fillRect(0, 0, gridPx, gridPx);
+
+  // Cells
+  for (var r = 0; r < N; r++) {
+    for (var c = 0; c < N; c++) {
+      var x = pad + c * cs;
+      var y = pad + r * cs;
+      var v = Array.isArray(gridValues) ? gridValues[r][c] : gridValues[r * N + c];
+      var isOrig = origSet.has(r + ',' + c);
+      ctx.fillStyle = isOrig ? '#3a3a6a' : (v !== 0 ? '#1a5a30' : '#12122e');
+      ctx.fillRect(x, y, cs, cs);
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, y, cs, cs);
+      if (v !== 0) {
+        ctx.fillStyle = isOrig ? '#bbb' : (colors.get(v) || '#8f8');
+        ctx.font = (isOrig ? 'bold ' : '') + fontSize + 'px "Segoe UI", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(digitToSymbol(v), x + cs / 2, y + cs / 2 + 1);
+      }
+    }
+  }
+
+  // Box borders
+  ctx.strokeStyle = '#6cf';
+  ctx.lineWidth = 2;
+  for (var br = 0; br <= N / bs; br++) {
+    var yy = pad + br * bs * cs;
+    ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(pad + cs * N, yy); ctx.stroke();
+  }
+  for (var bc = 0; bc <= N / bs; bc++) {
+    var xx = pad + bc * bs * cs;
+    ctx.beginPath(); ctx.moveTo(xx, pad); ctx.lineTo(xx, pad + cs * N); ctx.stroke();
+  }
+
+  // Download
+  var isSolved = statusEl.textContent.toLowerCase().indexOf('solved') >= 0;
+  var link = document.createElement('a');
+  link.download = 'sudoku_' + N + 'x' + N + (isSolved ? '_solved' : '') + '.png';
+  link.href = offCanvas.toDataURL('image/png');
+  link.click();
+}
 
 function newGrid() {
   var density = parseInt(densitySlider.value) / 100;
@@ -945,6 +1018,7 @@ function newGrid() {
   liveGrid = null;
   zoomSlider.value = renderer.zoomPct;
   zoomValEl.textContent = renderer.zoomPct + '%';
+  btnExport.disabled = false;
   statusEl.textContent = 'Generated '+currentSize+'\u00d7'+currentSize+' puzzle';
   statusEl.style.color = '#8f8';
 }
@@ -955,6 +1029,7 @@ async function solvePuzzle() {
   btnSolve.disabled = true;
   btnStop.disabled = false;
   btnNew.disabled = true;
+  btnExport.disabled = true;
   sizeButtons.forEach(function(b) { b.disabled = true; });
   statusEl.textContent = 'Solving...';
   statusEl.style.color = '#ff0';
@@ -963,7 +1038,7 @@ async function solvePuzzle() {
   solver = { stopRequested: false };
 
   var stepsSinceYield = 0;
-  var batchSize = currentSize <= 9 ? 1 : (currentSize <= 16 ? 2 : (currentSize <= 25 ? 4 : 8));
+  var batchSize = currentSize <= 9 ? 1 : (currentSize <= 16 ? 2 : (currentSize <= 25 ? 4 : (currentSize <= 64 ? 8 : 32)));
 
   var yieldToUI = function() {
     return new Promise(function(resolve) {
@@ -1041,6 +1116,7 @@ async function solvePuzzle() {
 
     if (engine.isSolved()) {
       renderer.draw(grid.values);
+      btnExport.disabled = false;
       statusEl.textContent = 'Solved in '+elapsed.toFixed(3)+'s ('+visQueue.stepCount+' steps)';
       statusEl.style.color = '#8f8';
     } else {

@@ -1,7 +1,22 @@
 import { Grid } from '../model/grid';
 
+export type MaskArray = BigUint64Array | bigint[];
+
+function createMasks(length: number, useTyped: boolean): MaskArray {
+  return useTyped ? new BigUint64Array(length) : new Array<bigint>(length).fill(0n);
+}
+
+export function copyMasks(dst: MaskArray, src: MaskArray): void {
+  if (dst instanceof BigUint64Array) {
+    (dst as BigUint64Array).set(src as BigUint64Array);
+  } else {
+    for (let i = 0; i < dst.length; i++) (dst as bigint[])[i] = (src as bigint[])[i];
+  }
+}
+
 /**
- * Bitmask-based candidate tracking using BigInt for sizes up to 64×64.
+ * Bitmask-based candidate tracking using BigInt.
+ * N≤64: BigUint64Array (fast typed arrays). N>64: bigint[] (arbitrary precision).
  * Each row/col/box has a bitmask of placed digits.
  * Allowed = fullMask & ~(row | col | box | manual)
  */
@@ -10,10 +25,10 @@ export class LayerManager {
   readonly size: number;
   readonly fullMask: bigint;
 
-  rowMasks: BigUint64Array;
-  colMasks: BigUint64Array;
-  boxMasks: BigUint64Array;
-  manualMasks: BigUint64Array; // per cell: size*size
+  rowMasks: MaskArray;
+  colMasks: MaskArray;
+  boxMasks: MaskArray;
+  manualMasks: MaskArray; // per cell: size*size
 
   private boxIdx: Int32Array; // precomputed box index for each cell
 
@@ -22,10 +37,11 @@ export class LayerManager {
     this.size = grid.size;
     this.fullMask = (1n << BigInt(this.size)) - 1n;
 
-    this.rowMasks = new BigUint64Array(this.size);
-    this.colMasks = new BigUint64Array(this.size);
-    this.boxMasks = new BigUint64Array(this.size);
-    this.manualMasks = new BigUint64Array(this.size * this.size);
+    const useTyped = this.size <= 64;
+    this.rowMasks = createMasks(this.size, useTyped);
+    this.colMasks = createMasks(this.size, useTyped);
+    this.boxMasks = createMasks(this.size, useTyped);
+    this.manualMasks = createMasks(this.size * this.size, useTyped);
 
     // Precompute box index
     const N = this.size;
@@ -45,10 +61,10 @@ export class LayerManager {
   clone(grid?: Grid): LayerManager {
     const g = grid ?? this.grid.clone();
     const lm = new LayerManager(g, true);
-    lm.rowMasks.set(this.rowMasks);
-    lm.colMasks.set(this.colMasks);
-    lm.boxMasks.set(this.boxMasks);
-    lm.manualMasks.set(this.manualMasks);
+    copyMasks(lm.rowMasks, this.rowMasks);
+    copyMasks(lm.colMasks, this.colMasks);
+    copyMasks(lm.boxMasks, this.boxMasks);
+    copyMasks(lm.manualMasks, this.manualMasks);
     return lm;
   }
 
@@ -156,31 +172,31 @@ export class LayerManager {
    */
   saveState(): {
     gridValues: Int32Array;
-    rowMasks: BigUint64Array;
-    colMasks: BigUint64Array;
-    boxMasks: BigUint64Array;
-    manualMasks: BigUint64Array;
+    rowMasks: MaskArray;
+    colMasks: MaskArray;
+    boxMasks: MaskArray;
+    manualMasks: MaskArray;
   } {
     return {
       gridValues: this.grid.values.slice(),
-      rowMasks: this.rowMasks.slice(),
-      colMasks: this.colMasks.slice(),
-      boxMasks: this.boxMasks.slice(),
-      manualMasks: this.manualMasks.slice(),
+      rowMasks: this.rowMasks.slice() as MaskArray,
+      colMasks: this.colMasks.slice() as MaskArray,
+      boxMasks: this.boxMasks.slice() as MaskArray,
+      manualMasks: this.manualMasks.slice() as MaskArray,
     };
   }
 
   restoreState(state: {
     gridValues: Int32Array;
-    rowMasks: BigUint64Array;
-    colMasks: BigUint64Array;
-    boxMasks: BigUint64Array;
-    manualMasks: BigUint64Array;
+    rowMasks: MaskArray;
+    colMasks: MaskArray;
+    boxMasks: MaskArray;
+    manualMasks: MaskArray;
   }): void {
     this.grid.values.set(state.gridValues);
-    this.rowMasks.set(state.rowMasks);
-    this.colMasks.set(state.colMasks);
-    this.boxMasks.set(state.boxMasks);
-    this.manualMasks.set(state.manualMasks);
+    copyMasks(this.rowMasks, state.rowMasks);
+    copyMasks(this.colMasks, state.colMasks);
+    copyMasks(this.boxMasks, state.boxMasks);
+    copyMasks(this.manualMasks, state.manualMasks);
   }
 }

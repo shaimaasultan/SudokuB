@@ -1,12 +1,18 @@
 /**
  * LIFO state stack for backtracking. Stores deep copies of solver state.
  */
+export type MaskArray = BigUint64Array | bigint[];
+
 export interface SolverState {
   gridValues: Int32Array;
-  rowMasks: BigUint64Array;
-  colMasks: BigUint64Array;
-  boxMasks: BigUint64Array;
-  manualMasks: BigUint64Array;
+  rowMasks: MaskArray;
+  colMasks: MaskArray;
+  boxMasks: MaskArray;
+  manualMasks: MaskArray;
+}
+
+function cloneMasks(arr: MaskArray): MaskArray {
+  return arr instanceof BigUint64Array ? arr.slice() : (arr as bigint[]).slice();
 }
 
 export class StateStack {
@@ -15,10 +21,10 @@ export class StateStack {
   push(state: SolverState): void {
     this.stack.push({
       gridValues: state.gridValues.slice(),
-      rowMasks: state.rowMasks.slice(),
-      colMasks: state.colMasks.slice(),
-      boxMasks: state.boxMasks.slice(),
-      manualMasks: state.manualMasks.slice(),
+      rowMasks: cloneMasks(state.rowMasks),
+      colMasks: cloneMasks(state.colMasks),
+      boxMasks: cloneMasks(state.boxMasks),
+      manualMasks: cloneMasks(state.manualMasks),
     });
   }
 
